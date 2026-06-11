@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log Agent — mylog_analytics</title>
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/layout.css">
+<link rel="stylesheet" href="/static/css/controls.css">
+<link rel="stylesheet" href="/static/css/chat.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-logo">
+      <span class="header-icon">📊</span>
+      <div>
+        <div class="header-title">Log Agent</div>
+        <div class="header-sub">mylog_analytics-container · port 8893</div>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge">
+        <span class="dot unknown" id="loki-dot"></span>
+        <span class="badge-label">Loki</span>
+      </div>
+      <div class="badge">
+        <span class="dot unknown" id="grafana-dot"></span>
+        <span class="badge-label">Grafana</span>
+      </div>
+      <button class="btn-icon" onclick="window._app.refresh()">↺ Refresh</button>
+    </div>
+  </header>
+
+  <!-- ── Body ── -->
+  <div class="body">
+
+    <!-- Left nav -->
+    <nav class="nav">
+      <button class="nav-item" data-section="stack"    onclick="window._app.switchSection('stack')">
+        <span class="nav-icon">⚡</span><span class="nav-label">Stack</span>
+      </button>
+      <button class="nav-item" data-section="explorer" onclick="window._app.switchSection('explorer')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Explorer</span>
+      </button>
+      <button class="nav-item" data-section="grafana"  onclick="window._app.switchSection('grafana')">
+        <span class="nav-icon">📈</span><span class="nav-label">Grafana</span>
+      </button>
+      <div class="nav-divider"></div>
+      <button class="nav-item" data-section="chat"     onclick="window._app.switchSection('chat')">
+        <span class="nav-icon">💬</span><span class="nav-label">AI Chat</span>
+      </button>
+    </nav>
+
+    <!-- Content -->
+    <main class="content">
+
+      <!-- ── Stack section ── -->
+      <div class="section-panel section" data-section="stack">
+        <div class="section-title">Log Analytics Stack</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:20px;line-height:1.5">
+          Start the stack in order: <strong style="color:var(--text2)">Loki → Promtail → Grafana</strong>.
+          Loki must be running before Promtail and before the Explorer can query logs.
+        </p>
+
+        <div class="service-grid">
+
+          <!-- Loki -->
+          <div class="service-card">
+            <div class="service-card-inner">
+              <div class="service-card-accent" style="background:#f46800"></div>
+              <div class="service-card-body">
+                <div class="service-card-head">
+                  <span class="service-icon">🗂</span>
+                  <span class="service-name">Loki</span>
+                  <span class="service-port">:3100</span>
+                </div>
+                <div class="service-desc">Log aggregation system. Receives logs from Promtail and stores them for querying with LogQL.</div>
+                <div class="service-status unknown" id="loki-status-badge">○ Stopped</div>
+                <div class="service-actions">
+                  <button class="btn btn-start" id="loki-start-btn"
+                    onclick="window._app.stack.startService('loki','Loki',this)">▶ Start Loki</button>
+                  <button class="btn btn-stop" id="loki-stop-btn"
+                    onclick="window._app.stack.stopService('loki','Loki',this)">■ Stop Loki</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Promtail -->
+          <div class="service-card">
+            <div class="service-card-inner">
+              <div class="service-card-accent" style="background:#f0a429"></div>
+              <div class="service-card-body">
+                <div class="service-card-head">
+                  <span class="service-icon">📡</span>
+                  <span class="service-name">Promtail</span>
+                  <span class="service-port">:9080</span>
+                </div>
+                <div class="service-desc">Log shipper. Scrapes Docker container logs via the Docker socket and forwards them to Loki.</div>
+                <div class="service-status unknown" id="promtail-status-badge">○ Stopped</div>
+                <div class="service-actions">
+                  <button class="btn btn-start" id="promtail-start-btn"
+                    onclick="window._app.stack.startService('promtail','Promtail',this)">▶ Start Promtail</button>
+                  <button class="btn btn-stop" id="promtail-stop-btn"
+                    onclick="window._app.stack.stopService('promtail','Promtail',this)">■ Stop Promtail</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grafana -->
+          <div class="service-card">
+            <div class="service-card-inner">
+              <div class="service-card-accent" style="background:#f05a28"></div>
+              <div class="service-card-body">
+                <div class="service-card-head">
+                  <span class="service-icon">📈</span>
+                  <span class="service-name">Grafana</span>
+                  <span class="service-port">:3000</span>
+                </div>
+                <div class="service-desc">Visualization platform. Pre-configured with Loki as datasource. Open the dashboard to explore logs visually.</div>
+                <div class="service-status unknown" id="grafana-status-badge">○ Stopped</div>
+                <div class="service-actions">
+                  <button class="btn btn-start" id="grafana-start-btn"
+                    onclick="window._app.stack.startService('grafana','Grafana',this)">▶ Start Grafana</button>
+                  <button class="btn btn-stop" id="grafana-stop-btn"
+                    onclick="window._app.stack.stopService('grafana','Grafana',this)">■ Stop Grafana</button>
+                  <a href="http://localhost:3000" target="_blank" class="btn btn-ghost">↗ Open Grafana</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Health fields -->
+        <div class="section-title" style="margin-top:24px">Health Status</div>
+        <div class="fields" id="health-fields">
+          <div class="field-row" style="color:var(--text3)">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ── Explorer section ── -->
+      <div class="section-panel section" data-section="explorer" style="display:none">
+        <div class="section-title">Log Explorer</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">
+          Query logs using <strong style="color:var(--text2)">LogQL</strong>. Loki must be running.
+          Click a label chip to build a query, or type a LogQL expression directly.
+        </p>
+
+        <!-- Quick queries -->
+        <div class="section-title" style="margin-bottom:8px">Quick Queries</div>
+        <div class="quick-queries">
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{job=&quot;docker&quot;}')">All containers</span>
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{job=&quot;docker&quot;} |= &quot;error&quot;')">Errors only</span>
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{job=&quot;docker&quot;} |= &quot;warn&quot;')">Warnings only</span>
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{job=&quot;host_logs&quot;}')">Host log files</span>
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{container=&quot;mypostgresql_db-container&quot;}')">PostgreSQL container</span>
+          <span class="quick-pill" onclick="window._app.explorer.setQuery('{container=&quot;mylog_analytics-container&quot;}')">Log agent container</span>
+        </div>
+
+        <!-- Labels -->
+        <div class="section-title" style="margin-bottom:8px">Labels</div>
+        <div id="label-chips" style="margin-bottom:18px;min-height:28px">
+          <span style="color:var(--text3);font-size:12px">Loading labels…</span>
+        </div>
+
+        <!-- Query form -->
+        <div class="explorer-form">
+          <div class="explorer-label">LogQL Query</div>
+          <input id="logql-input" class="explorer-input" type="text"
+            placeholder='{container="mypostgresql_db-container"} |= "error"'
+            onkeydown="if(event.key==='Enter')window._app.explorer.run($id('logql-run-btn'))">
+
+          <div class="explorer-row">
+            <div>
+              <div class="explorer-label">Time range</div>
+              <select id="logql-since" class="explorer-select">
+                <option value="15m">Last 15 min</option>
+                <option value="1h" selected>Last 1 hour</option>
+                <option value="3h">Last 3 hours</option>
+                <option value="6h">Last 6 hours</option>
+                <option value="12h">Last 12 hours</option>
+                <option value="24h">Last 24 hours</option>
+              </select>
+            </div>
+            <div>
+              <div class="explorer-label">Limit</div>
+              <select id="logql-limit" class="explorer-select">
+                <option value="50">50 lines</option>
+                <option value="100" selected>100 lines</option>
+                <option value="250">250 lines</option>
+                <option value="500">500 lines</option>
+              </select>
+            </div>
+            <div>
+              <div class="explorer-label">Direction</div>
+              <select id="logql-dir" class="explorer-select">
+                <option value="backward" selected>Newest first</option>
+                <option value="forward">Oldest first</option>
+              </select>
+            </div>
+            <button id="logql-run-btn" class="btn btn-query"
+              onclick="window._app.explorer.run(this)">▶ Run Query</button>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div id="explorer-results" class="explorer-results">
+          <div class="explorer-empty">Run a query to see logs.</div>
+        </div>
+      </div>
+
+      <!-- ── Grafana section ── -->
+      <div class="section-panel section" data-section="grafana" style="display:none">
+        <div class="section-title">Grafana — Log Dashboard</div>
+
+        <div class="browser-card">
+          <div class="browser-status-row">
+            <div class="server-status-badge unknown" id="grafana-ui-badge">● CHECKING…</div>
+            <span class="browser-url">http://localhost:3000</span>
+          </div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+            Grafana is pre-configured with Loki as a datasource. Use the
+            <strong>Explore</strong> view to query logs visually, or create dashboards
+            for ongoing monitoring of your containers.
+          </p>
+          <div class="btn-group">
+            <button class="btn btn-start" id="grafana-start-btn"
+              onclick="window._app.grafana.start(this)">▶ Start Grafana</button>
+            <button class="btn btn-stop" id="grafana-stop-btn"
+              onclick="window._app.grafana.stop(this)">■ Stop Grafana</button>
+            <a href="http://localhost:3000" target="_blank" class="btn btn-ghost">↗ Open Grafana</a>
+            <a href="http://localhost:3000/explore" target="_blank" class="btn btn-ghost">🔍 Explore Logs</a>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:24px">About Grafana</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="field-row">
+            <span class="field-key">UI Port</span>
+            <span class="field-val plain">3000</span>
+          </div>
+          <div class="field-row">
+            <span class="field-key">Default login</span>
+            <span class="field-val plain" style="font-family:var(--mono)">anonymous (admin access)</span>
+          </div>
+          <div class="field-row">
+            <span class="field-key">Datasource</span>
+            <span class="field-val plain" style="font-family:var(--mono)">Loki → localhost:3100</span>
+          </div>
+          <div class="field-row">
+            <span class="field-key">Data persistence</span>
+            <span class="field-val plain" style="font-family:var(--mono)">mountspace/grafana-data/</span>
+          </div>
+          <div class="field-row">
+            <span class="field-key">Config</span>
+            <span class="field-val plain" style="font-family:var(--mono);font-size:11px">dockerspace/config/grafana/provisioning/</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Chat section ── -->
+      <div class="section-panel" data-section="chat" style="display:none;height:100%;overflow:hidden">
+        <div class="chat-wrap">
+          <div class="chat-toolbar">
+            <span class="chat-toolbar-title">💬 AI Log Analysis Chat</span>
+            <button class="btn btn-secondary btn-sm" onclick="window._app.chat.clear()">Clear history</button>
+          </div>
+          <div class="chat-msgs" id="chat-msgs">
+            <div class="chat-empty">Ask the log agent anything…<br>
+              <span style="font-size:11px;color:var(--text3);display:block;margin-top:8px">
+                Try: "write a LogQL query to find errors in PostgreSQL container",
+                "what does error rate look like?", "how do I set up Grafana alerts?"
+              </span>
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <textarea class="chat-input" id="chat-input" rows="2"
+              placeholder="Ask about logs, LogQL queries, Grafana dashboards…"
+              onkeydown="window._app.chat.keydown(event)"></textarea>
+            <button class="chat-send" id="chat-send" onclick="window._app.chat.send()">Send</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div><!-- /body -->
+
+  <!-- ── Action Log (bottom, always visible) ── -->
+  <div class="log-panel collapsed" id="log-panel">
+    <div class="log-header" onclick="window._app.log.toggle()">
+      <span class="log-header-title">
+        ⬛ Action Log
+        <span class="log-badge" id="log-badge">0 lines</span>
+      </span>
+      <div class="log-header-actions" onclick="event.stopPropagation()">
+        <button class="log-action-btn" onclick="window._app.log.clear()">Clear</button>
+        <button class="log-action-btn" id="log-toggle-btn"
+          onclick="window._app.log.toggle()">⌃</button>
+      </div>
+    </div>
+    <div class="log-body" id="log-body">
+      <div class="log-empty">No actions run yet.</div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script src="/static/js/lib/utils.js"></script>
+<script src="/static/js/lib/api.js"></script>
+<script src="/static/js/panels/log.js"></script>
+<script src="/static/js/panels/health.js"></script>
+<script src="/static/js/panels/stack.js"></script>
+<script src="/static/js/panels/explorer.js"></script>
+<script src="/static/js/panels/grafana.js"></script>
+<script src="/static/js/panels/chat.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

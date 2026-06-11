@@ -1,0 +1,10 @@
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Agent secrets and runtime state
+log-agent/agent.conf
+log-agent/memory/

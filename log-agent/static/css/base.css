@@ -1,0 +1,36 @@
+/* ── Variables + reset ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;--bg5:#3c444d;
+  --border:#30363d;--border2:#21262d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --green:#3fb950;--red:#f85149;--blue:#58a6ff;
+  --yellow:#e3b341;--purple:#bc8cff;--orange:#f0883e;
+  --green-dim:rgba(63,185,80,.12);--red-dim:rgba(248,81,73,.12);
+  --blue-dim:rgba(88,166,255,.10);--purple-dim:rgba(188,140,255,.10);
+  --font:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:'Cascadia Code','Fira Code','Consolas',monospace;
+  --radius:8px;--radius-sm:5px;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:4px}
+
+/* Status dot */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;vertical-align:middle}
+.dot.up{background:var(--green);box-shadow:0 0 5px var(--green)}
+.dot.down{background:var(--red)}
+.dot.unknown{background:var(--text3)}
+
+/* Fade-in */
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.fade-in{animation:fadeIn .2s ease forwards}

@@ -1,0 +1,6 @@
+# agent.conf — Log Agent configuration
+# Copy this file to agent.conf and fill in values.
+# This file is gitignored.
+
+# ── AI Chat ──────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY=your_api_key_here

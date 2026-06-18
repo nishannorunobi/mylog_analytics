@@ -18,6 +18,7 @@ class LogApp {
       btn.classList.toggle('active', btn.dataset.section === name);
     });
     if (name === 'explorer') this.explorer.load();
+    if (name === 'stack')    this.stack.render();   // re-render the tool list on tab open
   }
 
   async refresh() {

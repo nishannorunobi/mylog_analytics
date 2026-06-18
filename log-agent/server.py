@@ -100,6 +100,20 @@ GRAFANA_PID_FILE  = Path("/tmp/grafana.pid")
 
 app = FastAPI(title="Log Agent")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+# Dev tool: never let the browser cache JS/HTML/CSS, otherwise an edit→Upload→Start
+# deploy keeps showing stale assets (e.g. an old stack.js leaving the Stack tab on
+# "Loading tools…"). Serve static + the index with no-store.
+@app.middleware("http")
+async def _no_cache_assets(request, call_next):
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/" or p.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
+
 app.mount("/static", StaticFiles(directory=str(AGENT_DIR / "static")), name="static")
 
 # ── Process helpers ───────────────────────────────────────────────────────────
@@ -129,26 +143,63 @@ def _kill_pid(pid_file: Path) -> bool:
         return False
 
 async def _stream_script(cmd: list[str], pid_file: Path | None = None, env: dict | None = None):
-    """SSE-stream a subprocess; yields `data: <line>\n\n`."""
+    """SSE-stream a subprocess; yields `data: <line>\n\n`.
+
+    Launch errors (e.g. the binary is missing because the container was recreated
+    and /usr/local/bin was not persisted) are streamed as a readable error line
+    instead of raising — otherwise the request 500s and nothing rolls in the UI.
+    """
     run_env = {**os.environ, **(env or {})}
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        env=run_env,
-    )
-    if pid_file:
-        pid_file.write_text(str(proc.pid))
 
     async def generate():
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env=run_env,
+            )
+        except FileNotFoundError:
+            yield (f"data: [ERROR] '{cmd[0]}' not found on PATH inside the container. "
+                   f"The binary is missing (likely the container was recreated and "
+                   f"/usr/local/bin was not persisted). Run Build to reinstall it.\n\n")
+            yield "data: __done__\n\n"
+            return
+        except Exception as e:
+            yield f"data: [ERROR] failed to launch {cmd[0]}: {e}\n\n"
+            yield "data: __done__\n\n"
+            return
+
+        if pid_file:
+            pid_file.write_text(str(proc.pid))
+
+        # Stream lines, but stop once the script process itself exits. A start
+        # script launches a detached daemon (loki/grafana/...) that may keep the
+        # stdout pipe's write-end open, so readline() would never see EOF and the
+        # SSE stream would hang. Polling proc.returncode avoids that.
         while True:
-            line = await proc.stdout.readline()
+            try:
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=0.5)
+            except asyncio.TimeoutError:
+                if proc.returncode is not None:
+                    break          # script finished; don't wait on a daemon-held pipe
+                continue
             if not line:
-                break
+                break              # genuine EOF
             yield f"data: {line.decode(errors='replace').rstrip()}\n\n"
-        await proc.wait()
-        code = proc.returncode
-        yield f"data: [exit {code}]\n\n"
+
+        # Drain anything still buffered, without blocking.
+        try:
+            while True:
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=0.2)
+                if not line:
+                    break
+                yield f"data: {line.decode(errors='replace').rstrip()}\n\n"
+        except asyncio.TimeoutError:
+            pass
+
+        rc = proc.returncode if proc.returncode is not None else await proc.wait()
+        yield f"data: [exit {rc}]\n\n"
         yield "data: __done__\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream",
@@ -203,73 +254,68 @@ async def health():
         "timestamp":         datetime.now().isoformat(timespec="seconds"),
     }
 
-# ── Loki ──────────────────────────────────────────────────────────────────────
+# ── Tool framework ──────────────────────────────────────────────────────────────
+# The agent is a thin sysadmin invoker. Each managed tool is a folder under tools/
+# with a tool.conf plus the lifecycle scripts (build/start/stop/health/clean .sh).
+# Adding a new tool = drop a new folder; no Python change needed.
+TOOLS_DIR     = AGENT_DIR / "tools"
+_TOOL_ACTIONS = ("build", "start", "stop", "health", "clean")
 
-@app.post("/api/stream/loki/start")
-async def loki_start():
-    if _is_running(LOKI_PID_FILE):
-        async def already():
-            yield "data: Loki is already running.\n\n"
-            yield "data: __done__\n\n"
-        return StreamingResponse(already(), media_type="text/event-stream")
-    return await _stream_script(
-        ["loki", f"-config.file={LOKI_CONFIG}"],
-        pid_file=LOKI_PID_FILE,
-    )
 
-@app.post("/api/stream/loki/stop")
-async def loki_stop():
-    return await _stream_stop("Loki", LOKI_PID_FILE)
+def _parse_tool_conf(conf: Path) -> dict:
+    data = {}
+    for line in conf.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        data[k.strip().lower()] = v.strip()
+    return data
 
-# ── Promtail ──────────────────────────────────────────────────────────────────
 
-@app.post("/api/stream/promtail/start")
-async def promtail_start():
-    if _is_running(PROMTAIL_PID_FILE):
-        async def already():
-            yield "data: Promtail is already running.\n\n"
-            yield "data: __done__\n\n"
-        return StreamingResponse(already(), media_type="text/event-stream")
-    return await _stream_script(
-        ["promtail", f"-config.file={PROMTAIL_CONFIG}"],
-        pid_file=PROMTAIL_PID_FILE,
-    )
+def _discover_tools() -> list[dict]:
+    tools = []
+    if not TOOLS_DIR.exists():
+        return tools
+    for d in sorted(TOOLS_DIR.iterdir()):
+        conf = d / "tool.conf"
+        if not d.is_dir() or not conf.exists():
+            continue
+        meta = _parse_tool_conf(conf)
+        name = meta.get("name", d.name)
+        tools.append({
+            "name":    name,
+            "label":   meta.get("label", name),
+            "port":    meta.get("port", ""),
+            "order":   int(meta.get("order") or 99),
+            "actions": [a for a in _TOOL_ACTIONS if (d / f"{a}.sh").exists()],
+            "running": _is_running(Path(f"/tmp/{name}.pid")),
+        })
+    tools.sort(key=lambda t: t["order"])
+    return tools
 
-@app.post("/api/stream/promtail/stop")
-async def promtail_stop():
-    return await _stream_stop("Promtail", PROMTAIL_PID_FILE)
 
-# ── Grafana ───────────────────────────────────────────────────────────────────
+@app.get("/api/tools")
+async def list_tools():
+    return {"tools": _discover_tools()}
 
-@app.post("/api/stream/grafana/start")
-async def grafana_start():
-    if _is_running(GRAFANA_PID_FILE):
-        async def already():
-            yield "data: Grafana is already running.\n\n"
-            yield "data: __done__\n\n"
-        return StreamingResponse(already(), media_type="text/event-stream")
-    grafana_bin = Path("/usr/local/bin/grafana-server")
-    if not grafana_bin.exists():
+
+@app.post("/api/tools/{name}/{action}")
+async def run_tool_action(name: str, action: str):
+    if action not in _TOOL_ACTIONS:
+        return JSONResponse({"error": f"unknown action '{action}'"}, status_code=400)
+    tool_dir = (TOOLS_DIR / name).resolve()
+    # guard against path traversal — must be a direct child of tools/
+    if tool_dir.parent != TOOLS_DIR.resolve() or not tool_dir.is_dir():
+        return JSONResponse({"error": f"unknown tool '{name}'"}, status_code=404)
+    script = tool_dir / f"{action}.sh"
+    if not script.exists():
         async def missing():
-            yield "data: [ERROR] grafana-server not found. Run Build first.\n\n"
+            yield f"data: [ERROR] tool '{name}' has no {action}.sh\n\n"
             yield "data: __done__\n\n"
         return StreamingResponse(missing(), media_type="text/event-stream")
-    return await _stream_script(
-        [str(grafana_bin),
-         f"--homepath={GRAFANA_HOME}",
-         "--config=/dev/null",
-         f"cfg:paths.data=/grafana-data",
-         f"cfg:paths.provisioning={CONFIG_DIR}/grafana/provisioning",
-         "cfg:server.http_port=3000",
-         "cfg:auth.anonymous.enabled=true",
-         "cfg:auth.anonymous.org_role=Admin",
-         "cfg:security.allow_embedding=true"],
-        pid_file=GRAFANA_PID_FILE,
-    )
-
-@app.post("/api/stream/grafana/stop")
-async def grafana_stop():
-    return await _stream_stop("Grafana", GRAFANA_PID_FILE)
+    # The scripts manage their own PID files, so don't pass pid_file here.
+    return await _stream_script(["bash", str(script)])
 
 # ── Loki proxy (LogQL) ────────────────────────────────────────────────────────
 

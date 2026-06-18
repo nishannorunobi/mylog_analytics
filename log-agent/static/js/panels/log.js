@@ -105,15 +105,20 @@ class LogPanel {
     if (btn) setSpinner(btn, true);
     this.startAction(label);
     let success = true;
-    await Api.stream(path, {
-      onLine:  line => {
-        this.appendLine(line);
-        if (/error|failed|critical|\[exit [^0]/i.test(line)) success = false;
-      },
-      onDone:  () => this.endAction(success),
-      onError: msg => { this.appendLine('[STREAM ERROR] ' + msg); success = false; this.endAction(false); },
-    });
-    if (btn) setSpinner(btn, false);
+    try {
+      await Api.stream(path, {
+        onLine:  line => {
+          this.appendLine(line);
+          if (/error|failed|critical|\[exit [^0]/i.test(line)) success = false;
+        },
+        onDone:  () => this.endAction(success),
+        onError: msg => { this.appendLine('[STREAM ERROR] ' + msg); success = false; this.endAction(false); },
+      });
+    } catch (e) {
+      this.appendLine('[STREAM ERROR] ' + String(e)); success = false; this.endAction(false);
+    } finally {
+      if (btn) setSpinner(btn, false);   // always reset the button, even on error
+    }
     return success;
   }
 }

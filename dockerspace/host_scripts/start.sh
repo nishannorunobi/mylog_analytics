@@ -25,17 +25,23 @@ if docker image inspect "$FULL_IMAGE" &>/dev/null; then
     echo "Image $FULL_IMAGE already exists — skipping build."
 else
     echo "Building image $FULL_IMAGE..."
+    # Build context is the PROJECT ROOT so the Dockerfile can COPY the source in
+    # (.dockerignore excludes .venv/.git/__pycache__). Source is baked into the
+    # image — NOT bind-mounted — so the container is self-contained / cloud-portable.
     docker build \
         --build-arg BASE_IMAGE=ubuntu:22.04 \
         --build-arg CONTAINER_WORKDIR="$CONTAINER_WORKDIR" \
-        -t "$FULL_IMAGE" "$DOCKERSPACE_DIR"
+        -f "$DOCKERSPACE_DIR/Dockerfile" \
+        -t "$FULL_IMAGE" "$PROJECT_ROOT"
 fi
 
 # ── Shared network ────────────────────────────────────────────────────────────
+# Create idempotently: "already exists" is benign and must not abort the script
+# (set -e). A bare inspect-then-create is racy, so just create and swallow the dup error.
 SHARED_NETWORK="ums-network"
 if ! docker network inspect "$SHARED_NETWORK" &>/dev/null; then
     echo "Creating shared network $SHARED_NETWORK..."
-    docker network create "$SHARED_NETWORK"
+    docker network create "$SHARED_NETWORK" 2>/dev/null || true
 fi
 
 # ── Mount directories ─────────────────────────────────────────────────────────
@@ -52,14 +58,16 @@ fi
 
 if docker container inspect "$CONTAINER_NAME" &>/dev/null; then
     echo "Container $CONTAINER_NAME already exists — starting it..."
-    docker start "$CONTAINER_NAME"
+    docker start "$CONTAINER_NAME" >/dev/null 2>&1 || true
 else
     echo "Creating container $CONTAINER_NAME..."
+    # If a concurrent start created it between the check above and now, `docker run`
+    # fails with a name conflict — fall back to starting the existing one instead of
+    # aborting (set -e). Idempotent + race-tolerant.
     docker run -d \
         --name "$CONTAINER_NAME" \
         --hostname "$CONTAINER_NAME" \
         --network "$SHARED_NETWORK" \
-        -v "$PROJECT_ROOT":"$CONTAINER_WORKDIR" \
         -v "$WORKSPACE_ROOT/mountspace/logs":/host-logs \
         -v "$WORKSPACE_ROOT/mountspace/logs":/mountspace/logs \
         -v "$WORKSPACE_ROOT/mountspace/loki-data":/loki-data \
@@ -71,7 +79,11 @@ else
         -p 3000:3000 \
         -p 3100:3100 \
         "$FULL_IMAGE" \
-        tail -f /dev/null
+        tail -f /dev/null \
+    || {
+        echo "Container already exists (created concurrently) — starting it instead..."
+        docker start "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    }
 fi
 
 # Connect to shared network if not already

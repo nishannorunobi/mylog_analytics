@@ -14,7 +14,8 @@ function setSpinner(btn, on) {
     btn.disabled  = true;
   } else {
     if (btn._origHTML !== undefined) btn.innerHTML = btn._origHTML;
-    btn.disabled = false;
+    btn._origHTML = undefined;   // clear so status-driven code (renderStatus) can manage the button again
+    btn.disabled  = false;
   }
 }
 

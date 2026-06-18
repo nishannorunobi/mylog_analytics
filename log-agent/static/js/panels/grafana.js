@@ -17,12 +17,12 @@ class GrafanaPanel {
   }
 
   async start(btn) {
-    const ok = await this._log.run('/api/stream/grafana/start', 'Start Grafana', btn);
+    const ok = await this._log.run('/api/tools/grafana/start', 'Start Grafana', btn);
     if (ok) await window._app.refresh();
   }
 
   async stop(btn) {
-    await this._log.run('/api/stream/grafana/stop', 'Stop Grafana', btn);
+    await this._log.run('/api/tools/grafana/stop', 'Stop Grafana', btn);
     await window._app.refresh();
   }
 }

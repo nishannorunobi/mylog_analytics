@@ -65,75 +65,10 @@
           Loki must be running before Promtail and before the Explorer can query logs.
         </p>
 
-        <div class="service-grid">
-
-          <!-- Loki -->
-          <div class="service-card">
-            <div class="service-card-inner">
-              <div class="service-card-accent" style="background:#f46800"></div>
-              <div class="service-card-body">
-                <div class="service-card-head">
-                  <span class="service-icon">🗂</span>
-                  <span class="service-name">Loki</span>
-                  <span class="service-port">:3100</span>
-                </div>
-                <div class="service-desc">Log aggregation system. Receives logs from Promtail and stores them for querying with LogQL.</div>
-                <div class="service-status unknown" id="loki-status-badge">○ Stopped</div>
-                <div class="service-actions">
-                  <button class="btn btn-start" id="loki-start-btn"
-                    onclick="window._app.stack.startService('loki','Loki',this)">▶ Start Loki</button>
-                  <button class="btn btn-stop" id="loki-stop-btn"
-                    onclick="window._app.stack.stopService('loki','Loki',this)">■ Stop Loki</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Promtail -->
-          <div class="service-card">
-            <div class="service-card-inner">
-              <div class="service-card-accent" style="background:#f0a429"></div>
-              <div class="service-card-body">
-                <div class="service-card-head">
-                  <span class="service-icon">📡</span>
-                  <span class="service-name">Promtail</span>
-                  <span class="service-port">:9080</span>
-                </div>
-                <div class="service-desc">Log shipper. Scrapes Docker container logs via the Docker socket and forwards them to Loki.</div>
-                <div class="service-status unknown" id="promtail-status-badge">○ Stopped</div>
-                <div class="service-actions">
-                  <button class="btn btn-start" id="promtail-start-btn"
-                    onclick="window._app.stack.startService('promtail','Promtail',this)">▶ Start Promtail</button>
-                  <button class="btn btn-stop" id="promtail-stop-btn"
-                    onclick="window._app.stack.stopService('promtail','Promtail',this)">■ Stop Promtail</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Grafana -->
-          <div class="service-card">
-            <div class="service-card-inner">
-              <div class="service-card-accent" style="background:#f05a28"></div>
-              <div class="service-card-body">
-                <div class="service-card-head">
-                  <span class="service-icon">📈</span>
-                  <span class="service-name">Grafana</span>
-                  <span class="service-port">:3000</span>
-                </div>
-                <div class="service-desc">Visualization platform. Pre-configured with Loki as datasource. Open the dashboard to explore logs visually.</div>
-                <div class="service-status unknown" id="grafana-status-badge">○ Stopped</div>
-                <div class="service-actions">
-                  <button class="btn btn-start" id="grafana-start-btn"
-                    onclick="window._app.stack.startService('grafana','Grafana',this)">▶ Start Grafana</button>
-                  <button class="btn btn-stop" id="grafana-stop-btn"
-                    onclick="window._app.stack.stopService('grafana','Grafana',this)">■ Stop Grafana</button>
-                  <a href="http://localhost:3000" target="_blank" class="btn btn-ghost">↗ Open Grafana</a>
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <!-- Tools are discovered from the agent (tools/*/tool.conf) and rendered
+             dynamically by stack.js — each gets Build/Start/Stop/Health/Clean. -->
+        <div class="service-grid" id="tools-grid">
+          <div class="field-row" style="color:var(--text3)">Loading tools…</div>
         </div>
 
         <!-- Health fields -->

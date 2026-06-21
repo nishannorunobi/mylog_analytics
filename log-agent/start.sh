@@ -19,15 +19,15 @@ echo "[logging] → $LOG_FILE"
 
 echo "[start-log-agent] Starting log-agent startup sequence..."
 
-if [ ! -d ".venv" ]; then
-    echo "[start-log-agent] venv not found — run build.sh first."
-    exit 1
+# Self-bootstrap: if the environment was cleaned (venv missing/incomplete), build it;
+# otherwise reuse the existing venv.
+if [ ! -d ".venv" ] || ! .venv/bin/python3 -c 'import fastapi, uvicorn' 2>/dev/null; then
+    echo "[start-log-agent] venv missing/incomplete — running build.sh..."
+    bash build.sh
 fi
 
-if [ ! -f "agent.conf" ]; then
-    echo "[start-log-agent] agent.conf not found — run build.sh first."
-    exit 1
-fi
+# Ensure agent.conf exists (build.sh creates it; copy from example if somehow absent).
+[ -f agent.conf ] || cp agent.conf.example agent.conf 2>/dev/null || true
 
 # Uvicorn gets its own mirror log (survives after this script's tee pipe closes)
 UVICORN_LOG="${LOG_MIRROR_ROOT:-/tmp/logs}/log-agent/server_py.log"

@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 from datetime import datetime
@@ -130,6 +131,21 @@ def _read_pid(path: Path) -> int | None:
 def _is_running(pid_file: Path) -> bool:
     return _read_pid(pid_file) is not None
 
+def _port_listening(port: int | str, host: str = "127.0.0.1") -> bool:
+    """True if something is accepting TCP connections on `port`.
+
+    Status is read from the port, not a PID file: the tools are launched by the
+    container startup (via their start.sh) which bypasses the agent, so no PID
+    file exists even though the process is up. The port is the source of truth.
+    """
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        return False
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
 def _kill_pid(pid_file: Path) -> bool:
     pid = _read_pid(pid_file)
     if pid is None:
@@ -231,9 +247,9 @@ async def index():
 
 @app.get("/health")
 async def health():
-    loki_ok     = _is_running(LOKI_PID_FILE)
-    promtail_ok = _is_running(PROMTAIL_PID_FILE)
-    grafana_ok  = _is_running(GRAFANA_PID_FILE)
+    loki_ok     = _port_listening(3100)
+    promtail_ok = _port_listening(PROMTAIL_PORT)
+    grafana_ok  = _port_listening(3000)
 
     # Quick connectivity check to Loki
     loki_reachable = False
@@ -283,13 +299,14 @@ def _discover_tools() -> list[dict]:
             continue
         meta = _parse_tool_conf(conf)
         name = meta.get("name", d.name)
+        port = meta.get("port", "")
         tools.append({
             "name":    name,
             "label":   meta.get("label", name),
-            "port":    meta.get("port", ""),
+            "port":    port,
             "order":   int(meta.get("order") or 99),
             "actions": [a for a in _TOOL_ACTIONS if (d / f"{a}.sh").exists()],
-            "running": _is_running(Path(f"/tmp/{name}.pid")),
+            "running": _port_listening(port),
         })
     tools.sort(key=lambda t: t["order"])
     return tools

@@ -1,6 +1,8 @@
 #!/bin/bash
-# build.sh — Install Python 3, Loki, Promtail, Grafana, and log-agent dependencies.
+# build.sh — Install Python 3, Loki, Promtail, and log-agent dependencies.
 # Run INSIDE mylog_analytics-container.
+# NOTE: Grafana is no longer installed here — it is built from source by its own
+# tool (tools/grafana/gitclone.sh + the UI Build button → tools/grafana/build.sh).
 set -euo pipefail
 
 # ── Mirror logging ─────────────────────────────────────────────────────────────
@@ -24,7 +26,6 @@ success() { echo -e "${GREEN}[ OK ]${RESET}  $*"; }
 error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 
 LOKI_VERSION="3.4.1"
-GRAFANA_VERSION="11.5.0"
 
 # ── System packages ───────────────────────────────────────────────────────────
 info "Updating apt and installing base packages..."
@@ -73,19 +74,7 @@ else
 fi
 
 # ── Grafana ───────────────────────────────────────────────────────────────────
-if ! command -v grafana-server &>/dev/null; then
-    info "Installing Grafana v${GRAFANA_VERSION}..."
-    curl -fsSL \
-        "https://dl.grafana.com/oss/release/grafana-${GRAFANA_VERSION}.linux-amd64.tar.gz" \
-        -o /tmp/grafana.tar.gz
-    tar -xzf /tmp/grafana.tar.gz -C /opt/
-    ln -sf "/opt/grafana-${GRAFANA_VERSION}/bin/grafana-server" /usr/local/bin/grafana-server
-    ln -sf "/opt/grafana-${GRAFANA_VERSION}/bin/grafana"        /usr/local/bin/grafana
-    rm -f /tmp/grafana.tar.gz
-    success "Grafana installed: $(grafana-server --version 2>&1 | head -1)"
-else
-    success "Grafana found: $(grafana-server --version 2>&1 | head -1)"
-fi
+# Built from source by tools/grafana (gitclone.sh + Build button) — not installed here.
 
 # ── agent.conf ────────────────────────────────────────────────────────────────
 if [ ! -f "agent.conf" ]; then

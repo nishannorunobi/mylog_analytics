@@ -247,9 +247,12 @@ async def index():
 
 @app.get("/health")
 async def health():
-    loki_ok     = _port_listening(3100)
-    promtail_ok = _port_listening(PROMTAIL_PORT)
-    grafana_ok  = _port_listening(3000)
+    loki_ok       = _port_listening(3100)
+    promtail_ok   = _port_listening(PROMTAIL_PORT)
+    grafana_ok    = _port_listening(3000)
+    prometheus_ok = _port_listening(9090)
+    tempo_ok      = _port_listening(3200)
+    beyla_ok      = _port_listening(8999)
 
     # Quick connectivity check to Loki
     loki_reachable = False
@@ -266,6 +269,9 @@ async def health():
         "loki_reachable":    loki_reachable,
         "promtail_running":  promtail_ok,
         "grafana_running":   grafana_ok,
+        "prometheus_running": prometheus_ok,
+        "tempo_running":     tempo_ok,
+        "beyla_running":     beyla_ok,
         "agent_running":     True,
         "timestamp":         datetime.now().isoformat(timespec="seconds"),
     }
